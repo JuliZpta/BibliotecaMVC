@@ -111,6 +111,8 @@ namespace BibliotecaMVC.Controllers {
             });
 
             Console.WriteLine("Préstamo registrado.");
+            Console.WriteLine($"Cantidad disponible de '{material.Titulo}': {material.CantidadActual}");
+
         }
 
         public void RegistrarDevolucion() {
@@ -148,6 +150,8 @@ namespace BibliotecaMVC.Controllers {
             });
 
             Console.WriteLine("Devolución registrada.");
+            Console.WriteLine($"Cantidad disponible de '{material.Titulo}': {material.CantidadActual}");
+
         }
 
         public void IncrementarCantidadMaterial() {
