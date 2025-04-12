@@ -1,182 +1,183 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using BibliotecaMVC.Models;
+using MongoDB.Driver;
 
-namespace BibliotecaMVC.Controllers {
-    public class BibliotecaController {
-        private List<Material> materiales = new();
-        private List<Persona> personas = new();
-        private List<Movimiento> historial = new();
+namespace BibliotecaMVC.Controllers
+{
+    public class BibliotecaController
+    {
+        private readonly MongoContext _context;
 
-        public void RegistrarMaterial() {
-            Console.Write("ID del material: ");
-            string id = Console.ReadLine();
-            if (materiales.Any(m => m.Id == id)) {
-                Console.WriteLine("Ya existe un material con ese ID.");
-                return;
-            }
+        public BibliotecaController()
+        {
+            _context = new MongoContext();
+        }
 
-            Console.Write("Título del material: ");
-            string titulo = Console.ReadLine();
+        public void RegistrarMaterial(string titulo, int cantidad)
+        {
+            // Obtener la cantidad de materiales existentes
+            var totalMateriales = _context.Materiales.CountDocuments(_ => true);
 
-            Console.Write("Cantidad registrada: ");
-            int cantidad = int.Parse(Console.ReadLine());
+            // Crear un ID personalizado: "MAT001", "MAT002", etc.
+            var nuevoId = $"MAT{(totalMateriales + 1).ToString("D3")}";
 
-            Material nuevo = new() {
-                Id = id,
+            var material = new Material
+            {
+                Id = nuevoId,
                 Titulo = titulo,
                 FechaRegistro = DateTime.Now,
                 CantidadRegistrada = cantidad,
                 CantidadActual = cantidad
             };
 
-            materiales.Add(nuevo);
-            Console.WriteLine("Material registrado con éxito.");
+            _context.Materiales.InsertOne(material);
+
+            Console.WriteLine($"✅ Material registrado con ID: {material.Id}");
         }
 
-        public void RegistrarPersona() {
-            Console.Write("Cédula: ");
-            string cedula = Console.ReadLine();
-            if (personas.Any(p => p.Cedula == cedula)) {
-                Console.WriteLine("Ya existe una persona con esa cédula.");
+
+        public void RegistrarPersona(string nombre, string cedula, string rol)
+        {
+            var existente = _context.Personas.Find(p => p.Cedula == cedula).FirstOrDefault();
+            if (existente != null)
+            {
+                Console.WriteLine("⚠️ Ya existe una persona con esa cédula.");
                 return;
             }
 
-            Console.Write("Nombre: ");
-            string nombre = Console.ReadLine();
-
-            Console.Write("Rol (Estudiante, Profesor, Administrativo): ");
-            string rol = Console.ReadLine();
-
-            personas.Add(new Persona {
+            var persona = new Persona
+            {
                 Nombre = nombre,
                 Cedula = cedula,
                 Rol = rol
-            });
+            };
 
-            Console.WriteLine("Persona registrada con éxito.");
+            _context.Personas.InsertOne(persona);
+            Console.WriteLine("✅ Persona registrada correctamente.");
         }
 
-        public void EliminarPersona() {
-            Console.Write("Cédula de la persona a eliminar: ");
-            string cedula = Console.ReadLine();
-
-            var persona = personas.FirstOrDefault(p => p.Cedula == cedula);
-            if (persona == null) {
-                Console.WriteLine("Persona no encontrada.");
+        public void EliminarPersona(string cedula)
+        {
+            var persona = _context.Personas.Find(p => p.Cedula == cedula).FirstOrDefault();
+            if (persona == null)
+            {
+                Console.WriteLine("❌ Persona no encontrada.");
                 return;
             }
 
-            if (persona.PrestamosActuales.Count > 0) {
-                Console.WriteLine("No se puede eliminar la persona porque tiene materiales prestados.");
+            if (persona.PrestamosActuales != null && persona.PrestamosActuales.Count > 0)
+            {
+                Console.WriteLine("⚠️ No se puede eliminar. Tiene préstamos activos.");
                 return;
             }
 
-            personas.Remove(persona);
-            Console.WriteLine("Persona eliminada con éxito.");
+            _context.Personas.DeleteOne(p => p.Cedula == cedula);
+            Console.WriteLine("✅ Persona eliminada.");
         }
 
-        public void RegistrarPrestamo() {
-            Console.Write("Cédula de la persona: ");
-            string cedula = Console.ReadLine();
-
-            var persona = personas.FirstOrDefault(p => p.Cedula == cedula);
-            if (persona == null) {
-                Console.WriteLine("Persona no registrada.");
+        public void RegistrarPrestamo(string cedula, string idMaterial)
+        {
+            var persona = _context.Personas.Find(p => p.Cedula == cedula).FirstOrDefault();
+            if (persona == null)
+            {
+                Console.WriteLine("❌ Persona no registrada.");
                 return;
             }
 
-            if (persona.PrestamosActuales.Count >= persona.LimitePrestamos()) {
-                Console.WriteLine("Límite de préstamos alcanzado.");
+            if (persona.PrestamosActuales.Count >= persona.LimitePrestamos())
+            {
+                Console.WriteLine("⚠️ Límite de préstamos alcanzado.");
                 return;
             }
 
-            Console.Write("ID del material: ");
-            string materialId = Console.ReadLine();
-
-            var material = materiales.FirstOrDefault(m => m.Id == materialId);
-            if (material == null || material.CantidadActual <= 0) {
-                Console.WriteLine("Material no disponible.");
+            var material = _context.Materiales.Find(m => m.Id == idMaterial).FirstOrDefault();
+            if (material == null || material.CantidadActual <= 0)
+            {
+                Console.WriteLine("❌ Material no disponible.");
                 return;
             }
 
             material.CantidadActual--;
             persona.PrestamosActuales.Add(material.Id);
 
-            historial.Add(new Movimiento {
+            _context.Materiales.ReplaceOne(m => m.Id == material.Id, material);
+            _context.Personas.ReplaceOne(p => p.Cedula == persona.Cedula, persona);
+
+            var movimiento = new Movimiento
+            {
                 Tipo = "Préstamo",
                 MaterialId = material.Id,
-                TituloMaterial = material.Titulo,
-                CedulaPersona = persona.Cedula,
-                NombrePersona = persona.Nombre,
-                Fecha = DateTime.Now
-            });
+                Fecha = DateTime.Now,
+                Cantidad = 1
+            };
+            _context.Movimientos.InsertOne(movimiento);
 
-            Console.WriteLine("Préstamo registrado.");
-            Console.WriteLine($"Cantidad disponible de '{material.Titulo}': {material.CantidadActual}");
-
+            Console.WriteLine("✅ Préstamo registrado.");
         }
 
-        public void RegistrarDevolucion() {
-            Console.Write("Cédula de la persona: ");
-            string cedula = Console.ReadLine();
-
-            var persona = personas.FirstOrDefault(p => p.Cedula == cedula);
-            if (persona == null) {
-                Console.WriteLine("Persona no registrada.");
+        public void RegistrarDevolucion(string cedula, string idMaterial)
+        {
+            var persona = _context.Personas.Find(p => p.Cedula == cedula).FirstOrDefault();
+            if (persona == null)
+            {
+                Console.WriteLine("❌ Persona no registrada.");
                 return;
             }
 
-            Console.Write("ID del material a devolver: ");
-            string materialId = Console.ReadLine();
-
-            if (!persona.PrestamosActuales.Contains(materialId)) {
-                Console.WriteLine("La persona no tiene este material prestado.");
+            if (!persona.PrestamosActuales.Contains(idMaterial))
+            {
+                Console.WriteLine("⚠️ La persona no tiene ese material prestado.");
                 return;
             }
 
-            var material = materiales.FirstOrDefault(m => m.Id == materialId);
-            if (material != null) {
+            var material = _context.Materiales.Find(m => m.Id == idMaterial).FirstOrDefault();
+            if (material != null)
+            {
                 material.CantidadActual++;
+                _context.Materiales.ReplaceOne(m => m.Id == material.Id, material);
             }
 
-            persona.PrestamosActuales.Remove(materialId);
+            persona.PrestamosActuales.Remove(idMaterial);
+            _context.Personas.ReplaceOne(p => p.Cedula == persona.Cedula, persona);
 
-            historial.Add(new Movimiento {
+            var movimiento = new Movimiento
+            {
                 Tipo = "Devolución",
-                MaterialId = materialId,
-                TituloMaterial = material?.Titulo ?? "Desconocido",
-                CedulaPersona = persona.Cedula,
-                NombrePersona = persona.Nombre,
-                Fecha = DateTime.Now
-            });
+                MaterialId = idMaterial,
+                Fecha = DateTime.Now,
+                Cantidad = 1
+            };
+            _context.Movimientos.InsertOne(movimiento);
 
-            Console.WriteLine("Devolución registrada.");
-            Console.WriteLine($"Cantidad disponible de '{material.Titulo}': {material.CantidadActual}");
-
+            Console.WriteLine("✅ Devolución registrada.");
         }
 
-        public void IncrementarCantidadMaterial() {
-            Console.Write("ID del material: ");
-            string id = Console.ReadLine();
-
-            var material = materiales.FirstOrDefault(m => m.Id == id);
-            if (material == null) {
-                Console.WriteLine("Material no encontrado.");
+        public void IncrementarCantidadMaterial(string idMaterial, int extra)
+        {
+            var material = _context.Materiales.Find(m => m.Id == idMaterial).FirstOrDefault();
+            if (material == null)
+            {
+                Console.WriteLine("❌ Material no encontrado.");
                 return;
             }
 
-            Console.Write("Cantidad a agregar: ");
-            int cantidad = int.Parse(Console.ReadLine());
+            material.CantidadRegistrada += extra;
+            material.CantidadActual += extra;
 
-            material.CantidadRegistrada += cantidad;
-            material.CantidadActual += cantidad;
-
-            Console.WriteLine("Cantidad actualizada.");
+            _context.Materiales.ReplaceOne(m => m.Id == material.Id, material);
+            Console.WriteLine("✅ Cantidad actualizada.");
         }
 
-        public void MostrarHistorial() {
-            Console.WriteLine("\n=== Historial de Movimientos ===");
-            foreach (var m in historial) {
-                Console.WriteLine($"{m.Fecha}: {m.Tipo} - {m.TituloMaterial} por {m.NombrePersona} ({m.CedulaPersona})");
+        public void MostrarHistorial()
+        {
+            var movimientos = _context.Movimientos.Find(_ => true).ToList();
+
+            Console.WriteLine("\n📘 Historial de movimientos:");
+            foreach (var mov in movimientos)
+            {
+                Console.WriteLine($"🔹 {mov.Tipo} - ID Material: {mov.MaterialId} - Cantidad: {mov.Cantidad} - Fecha: {mov.Fecha}");
             }
         }
     }
