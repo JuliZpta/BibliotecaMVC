@@ -9,6 +9,7 @@ namespace BibliotecaMVC.Views {
             Console.WriteLine("5. Registrar devolución");
             Console.WriteLine("6. Incrementar cantidad de material");
             Console.WriteLine("7. Consultar historial");
+            Console.WriteLine("8. Prestamos de usuarios");
             Console.WriteLine("0. Salir");
         }
     }

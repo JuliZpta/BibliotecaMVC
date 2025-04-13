@@ -13,7 +13,7 @@ public class MongoContext
 
     public MongoContext()
     {
-        var client = new MongoClient("mongodb://localhost:27017"); // Usa Atlas si estás en la nube
+        var client = new MongoClient("mongodb://localhost:27017"); 
         _database = client.GetDatabase("BibliotecaDB");
     }
 
