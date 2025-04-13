@@ -203,7 +203,7 @@ namespace BibliotecaMVC.Controllers
         {
             var movimientos = _context.Movimientos.Find(_ => true).ToList();
 
-            Console.WriteLine("\n📚 Historial de movimientos:");
+            Console.WriteLine("\nHistorial de movimientos:");
             foreach (var mov in movimientos)
             {
                 Console.WriteLine($"{mov.Tipo} - ID Material: {mov.MaterialId} - Cantidad: {mov.Cantidad} - Fecha: {mov.Fecha} - Persona: {mov.NombrePersona} ({mov.CedulaPersona})");
